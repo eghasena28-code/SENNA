@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>GeoSenna v12.4 - Field Intelligence</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0e1a;
+            --card: #151a2b;
+            --accent: #10b981;
+            --gold: #fbbf24;
+            --text: #e2e8f0;
+            --danger: #ef4444;
+            --safe-top: env(safe-area-inset-top);
+            --safe-bottom: env(safe-area-inset-bottom);
+        }
+        * { 
+            box-sizing: border-box; 
+            -webkit-tap-highlight-color: transparent; 
+            font-family: 'Inter', sans-serif; 
+            touch-action: manipulation;
+        }
+        body { 
+            margin: 0; 
+            background: var(--bg); 
+            color: var(--text); 
+            overflow: hidden; 
+            height: 100dvh; 
+            width: 100vw; 
+        }
+        
+        .page { 
+            display: none; 
+            height: 100dvh; 
+            width: 100vw; 
+            flex-direction: column; 
+            position: fixed; 
+            top: 0; 
+            background: var(--bg); 
+            z-index: 10; 
+            padding-top: var(--safe-top);
+            padding-bottom: var(--safe-bottom);
+        }
+        .page.active { display: flex; }
+
+        header {
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(21, 26, 43, 0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            z-index: 100;
+        }
+        header h1 { font-family: 'Orbitron'; font-size: 18px; margin: 0; color: var(--gold); }
+
+        .main-menu { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+        .menu-item {
+            background: var(--card);
+            padding: 20px 16px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            border: 1px solid rgba(255,255,255,0.08);
+            transition: transform 0.1s;
+        }
+        .menu-item:active { transform: scale(0.97); background: #1c233a; }
+        .menu-item div b { font-size: 16px; display: block; }
+        .menu-item div small { color: #94a3b8; font-size: 12px; }
+
+        .scroller { flex: 1; overflow-y: auto; padding: 10px 20px 120px; -webkit-overflow-scrolling: touch; }
+        
+        .card-row {
+            background: rgba(255,255,255,0.04);
+            padding: 14px;
+            border-radius: 14px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .card-info { flex: 1; overflow: hidden; }
+        .card-info b { font-size: 14px; white-space: nowrap; text-overflow: ellipsis; display: block; }
+
+        .btn-fly { background: var(--accent); color: #000; border: none; padding: 10px 16px; border-radius: 10px; font-size: 11px; font-weight: 800; }
+        .btn-fly:active { opacity: 0.8; }
+
+        #map { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 1; }
+        .map-ui { position: absolute; z-index: 1000; width: 100%; height: 100%; pointer-events: none; top: var(--safe-top); }
+        .map-ui * { pointer-events: auto; }
+        
+        .nav-panel {
+            position: absolute; bottom: calc(25px + var(--safe-bottom)); left: 12px; right: 12px;
+            background: rgba(11, 15, 26, 0.96); backdrop-filter: blur(20px);
+            padding: 18px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.2);
+        }
+        .dist-txt { font-family: 'Orbitron'; font-size: 38px; font-weight: 700; color: #fff; }
+
+        .btn-sq {
+            width: 50px; height: 50px; border-radius: 14px;
+            background: var(--card); border: 1px solid rgba(255,255,255,0.2);
+            color: #fff; display: flex; align-items: center; justify-content: center;
+        }
+
+        .fab {
+            position: fixed; bottom: calc(24px + var(--safe-bottom)); right: 20px;
+            width: 60px; height: 60px; background: var(--accent);
+            border-radius: 18px; border: none; color: #fff;
+            z-index: 99; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 8px 20px rgba(16,185,129,0.4);
+        }
+
+        #photo-modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.95); z-index: 20000; align-items: center; justify-content: center;
+        }
+        #photo-modal img { max-width: 95%; max-height: 85%; border-radius: 12px; border: 2px solid white; object-fit: contain; }
+        
+        input[type="text"], input[type="date"] {
+            -webkit-appearance: none;
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="index-page" class="page active">
+    <header>
+        <h1>GEOSENNA<span style="color:#fff">28</span></h1>
+        <i data-lucide="crosshair" size="20" color="#10b981"></i>
+    </header>
+    <div class="main-menu">
+        <div class="menu-item" onclick="showP('project-page')">
+            <i data-lucide="map-pin" color="#10b981"></i>
+            <div><b>1. Project Lapangan</b><small>KML • Navigasi • Foto</small></div>
+        </div>
+        <div class="menu-item" onclick="showP('pbb-page')">
+            <i data-lucide="file-spreadsheet" color="#f59e0b"></i>
+            <div><b>2. Update PBB</b><small>Database Excel Lapangan</small></div>
+        </div>
+        <div class="menu-item" onclick="showP('pbt-page')">
+            <i data-lucide="file-spreadsheet" color="#8b5cf6"></i>
+            <div><b>3. Update PBT</b><small>Database Excel Bidang</small></div>
+        </div>
+        <div class="menu-item" onclick="showP('notulen-page')">
+            <i data-lucide="clipboard-list" color="#ec4899"></i>
+            <div><b>4. Notulen Meeting</b><small>Arsip Koordinasi</small></div>
+        </div>
+    </div>
+</div>
+
+<div id="project-page" class="page">
+    <header>
+        <button class="btn-sq" onclick="showP('index-page')"><i data-lucide="arrow-left"></i></button>
+        <h1 style="margin-left:12px;">Data Proyek</h1>
+    </header>
+    <div class="scroller" id="project-list"></div>
+    <button class="fab" onclick="showP('upload-page')"><i data-lucide="plus"></i></button>
+</div>
+
+<div id="bidang-page" class="page">
+    <header>
+        <button class="btn-sq" onclick="showP('project-page')"><i data-lucide="arrow-left"></i></button>
+        <b id="active-title" style="margin-left:10px; font-size:16px;">Bidang</b>
+    </header>
+    <div class="scroller" id="bidang-list"></div>
+</div>
+
+<div id="map-page" class="page">
+    <div id="map"></div>
+    <div class="map-ui">
+        <div style="padding:15px; display:flex; justify-content:space-between;">
+            <button class="btn-sq" onclick="showP('bidang-page')"><i data-lucide="arrow-left"></i></button>
+            <button class="btn-sq" onclick="forceGPS()" style="background:var(--gold); color:#000; border:none;">
+                <i data-lucide="locate-fixed"></i>
+            </button>
+        </div>
+        <div class="nav-panel">
+            <div id="nav-label" style="font-size:10px; color:var(--gold); font-weight:800; letter-spacing: 1px;">MENGHUBUNGKAN GPS...</div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div><span id="nav-d" class="dist-txt">0.00</span><small style="color:var(--gold); margin-left:4px;">M</small></div>
+                <div id="nav-a" style="font-size:11px; color:var(--accent); font-weight:800;">AKURASI: --</div>
+            </div>
+            <button id="btn-cancel" onclick="stopLock()" style="display:none; width:100%; margin-top:12px; padding:12px; background:rgba(239,68,68,0.2); border:1px solid var(--danger); color:var(--danger); border-radius:12px; font-weight:700;">LEPAS KUNCI</button>
+        </div>
+    </div>
+</div>
+
+<div id="upload-page" class="page" style="padding:20px;">
+    <button class="btn-sq" onclick="showP('project-page')"><i data-lucide="arrow-left"></i></button>
+    <h3 style="margin:20px 0 10px;">Import KML Baru</h3>
+    <input type="text" id="in-name" placeholder="Nama Proyek (Contoh: Kavling A)" style="width:100%; padding:15px; background:var(--card); border:1px solid #2d3748; color:#fff; border-radius:12px; margin-bottom:15px; font-size: 16px;">
+    <input type="file" id="kml" accept=".kml" onchange="handleKML(this)" style="width:100%; padding:12px; background:var(--card); border:1px solid #2d3748; color:#fff; border-radius:12px;">
+</div>
+
+<div id="pbb-page" class="page"><header><button class="btn-sq" onclick="showP('index-page')"><i data-lucide="arrow-left"></i></button><h1 style="margin-left:12px;">Database PBB</h1></header><div class="scroller"><input type="file" accept=".xlsx,.xls" onchange="handleExcelUpload(this, 'PBB')" style="margin:20px 0; width:100%; color:#fff;"><div id="pbb-list"></div></div></div>
+<div id="pbt-page" class="page"><header><button class="btn-sq" onclick="showP('index-page')"><i data-lucide="arrow-left"></i></button><h1 style="margin-left:12px;">Database PBT</h1></header><div class="scroller"><input type="file" accept=".xlsx,.xls" onchange="handleExcelUpload(this, 'PBT')" style="margin:20px 0; width:100%; color:#fff;"><div id="pbt-list"></div></div></div>
+<div id="notulen-page" class="page"><header><button class="btn-sq" onclick="showP('index-page')"><i data-lucide="arrow-left"></i></button><h1 style="margin-left:12px;">Notulen</h1></header><div class="scroller"><input type="date" id="not-date" style="margin:20px 0; width:100%; padding:10px;"><input type="file" onchange="handleNotulenUpload(this)" style="width:100%; color:#fff;"><div id="notulen-list"></div></div></div>
+
+<div id="photo-modal" onclick="this.style.display='none'"><img id="modal-image" src=""></div>
+
+<script>
+    lucide.createIcons();
+    let map, uMarker, layerG, watchID, lineN;
+    let projA = null, bidangA = null, lockT = null;
+    
+    const KEY = "GeoSenna_v12";
+    const KEY_PBB = "GeoSenna_PBB";
+    const KEY_PBT = "GeoSenna_PBT";
+    const KEY_NOTULEN = "GeoSenna_Notulen";
+
+    function showP(id) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if (id === 'project-page') loadDash();
+        if (id === 'pbb-page') loadExcelList('PBB');
+        if (id === 'pbt-page') loadExcelList('PBT');
+        if (id === 'notulen-page') loadNotulenList();
+        if (id === 'map-page' && map) {
+            setTimeout(() => { 
+                map.invalidateSize(); 
+                forceGPS(); 
+            }, 400);
+        } else if (id !== 'map-page') {
+            if (watchID) {
+                navigator.geolocation.clearWatch(watchID);
+                watchID = null;
+            }
+        }
+    }
+
+    // GPS ENGINE (OPTIMIZED FOR HIGH ACCURACY)
+    function forceGPS() {
+        if (!navigator.geolocation) return alert("GPS Tidak Didukung");
+        document.getElementById('nav-label').innerText = "MENCARI SINYAL...";
+        
+        const options = { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 };
+
+        navigator.geolocation.getCurrentPosition(p => {
+            const pos = [p.coords.latitude, p.coords.longitude];
+            if(map) {
+                map.flyTo(pos, 20);
+                if(!uMarker) {
+                    uMarker = L.circleMarker(pos, { radius: 10, color: '#fff', fillColor: '#38bdf8', fillOpacity: 1, weight: 3 }).addTo(map);
+                } else {
+                    uMarker.setLatLng(pos);
+                }
+            }
+            document.getElementById('nav-label').innerText = "GPS TERKUNCI";
+            document.getElementById('nav-a').innerText = "AKURASI: " + Math.round(p.coords.accuracy) + "M";
+            playBeep(800);
+        }, (err) => {
+            alert("Gagal Sinkron GPS. Pastikan Izin Lokasi Aktif.");
+        }, options);
+    }
+
+    function startGPS() {
+        if (watchID) navigator.geolocation.clearWatch(watchID);
+        watchID = navigator.geolocation.watchPosition(pos => {
+            const lat = pos.coords.latitude, lng = pos.coords.longitude;
+            document.getElementById('nav-a').innerText = "AKURASI: " + Math.round(pos.coords.accuracy) + "M";
+            if (uMarker) uMarker.setLatLng([lat, lng]);
+            updateDist();
+        }, null, { enableHighAccuracy: true, maximumAge: 0 });
+    }
+
+    function startMap(idx) {
+        bidangA = idx;
+        showP('map-page');
+        setTimeout(() => {
+            if (!map) {
+                map = L.map('map', { zoomControl: false, tap: false });
+                L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', { 
+                    maxZoom: 22, 
+                    subdomains: ['mt0','mt1','mt2','mt3'] 
+                }).addTo(map);
+            }
+            const target = projA.areas[idx];
+            if (layerG) map.removeLayer(layerG);
+            layerG = L.featureGroup().addTo(map);
+            
+            L.polygon(target.pts, { color: '#10b981', weight: 4, fillOpacity: 0.2 }).addTo(layerG);
+            
+            target.pts.forEach((p, pi) => {
+                L.circleMarker(p, { radius: 8, color: '#fff', fillColor: '#fbbf24', fillOpacity: 1, weight: 3 }).addTo(layerG)
+                .on('click', () => {
+                    lockT = { lat: p[0], lng: p[1], label: `TITIK ${pi+1}` };
+                    document.getElementById('nav-label').innerText = "NAVIGASI: " + lockT.label;
+                    document.getElementById('btn-cancel').style.display = 'block';
+                    playBeep(1000);
+                    updateDist();
+                });
+            });
+            map.fitBounds(layerG.getBounds(), { padding: [50, 50] });
+            startGPS();
+        }, 400);
+    }
+
+    function updateDist() {
+        if (!uMarker || !lockT) return;
+        const currentPos = uMarker.getLatLng();
+        const d = calcD(currentPos.lat, currentPos.lng, lockT.lat, lockT.lng);
+        document.getElementById('nav-d').innerText = d.toFixed(2);
+        
+        if (lineN) map.removeLayer(lineN);
+        lineN = L.polyline([currentPos, [lockT.lat, lockT.lng]], { color: '#fbbf24', weight: 3, dashArray: '5,10' }).addTo(map);
+    }
+
+    // IMAGE COMPRESSION (CRITICAL FOR MOBILE STORAGE)
+    function capturePhoto(idx) {
+        const input = document.createElement('input'); 
+        input.type = 'file'; 
+        input.accept = 'image/*';
+        input.capture = 'environment'; // Langsung buka kamera belakang di HP
+        
+        input.onchange = (e) => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800;
+                    let width = img.width, height = img.height;
+                    if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                    projA.areas[idx].photo = compressedBase64;
+                    saveCurrentData();
+                    openBidang();
+                };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+        input.click();
+    }
+
+    function saveCurrentData() {
+        let data = JSON.parse(localStorage.getItem(KEY) || '[]');
+        let pIdx = data.findIndex(p => p.name === projA.name);
+        if (pIdx > -1) { 
+            data[pIdx] = projA; 
+            localStorage.setItem(KEY, JSON.stringify(data)); 
+        }
+    }
+
+    // RE-INITIALIZE LOGIC
+    function handleKML(input) {
+        if(!input.files[0]) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const xml = new DOMParser().parseFromString(e.target.result, "text/xml");
+            const marks = xml.getElementsByTagName("Placemark");
+            let kmlBuf = [];
+            for (let m of marks) {
+                const name = m.getElementsByTagName("name")[0]?.textContent || "Bidang";
+                const coords = m.getElementsByTagName("coordinates")[0]?.textContent;
+                if (coords) {
+                    const pts = coords.trim().split(/\s+/).map(s => {
+                        const c = s.split(','); 
+                        return [parseFloat(c[1]), parseFloat(c[0])];
+                    }).filter(c => !isNaN(c[0]));
+                    if (pts.length > 0) kmlBuf.push({ name, pts, photo: null });
+                }
+            }
+            if(kmlBuf.length === 0) return alert("KML Tidak Valid/Kosong");
+            
+            let data = JSON.parse(localStorage.getItem(KEY) || '[]');
+            data.unshift({ name: document.getElementById('in-name').value || "Project " + (data.length+1), areas: kmlBuf });
+            localStorage.setItem(KEY, JSON.stringify(data));
+            document.getElementById('in-name').value = "";
+            showP('project-page');
+        };
+        reader.readAsText(input.files[0]);
+    }
+
+    function loadDash() {
+        const list = document.getElementById('project-list');
+        const data = JSON.parse(localStorage.getItem(KEY) || '[]');
+        list.innerHTML = '';
+        data.forEach((p) => {
+            const div = document.createElement('div'); div.className = 'card-row';
+            div.onclick = () => { projA = p; openBidang(); };
+            div.innerHTML = `<i data-lucide="folder" color="#10b981"></i><div class="card-info"><b>${p.name}</b><small>${p.areas.length} Bidang</small></div><i data-lucide="chevron-right" size="16"></i>`;
+            list.appendChild(div);
+        });
+        lucide.createIcons();
+    }
+
+    function openBidang() {
+        const list = document.getElementById('bidang-list');
+        list.innerHTML = '';
+        projA.areas.forEach((a, i) => {
+            const div = document.createElement('div'); div.className = 'card-row';
+            const photoHTML = a.photo ? `<img onclick="showPhoto('${a.photo}'); event.stopPropagation();" src="${a.photo}" style="width:45px;height:45px;border-radius:8px;object-fit:cover;border:1px solid #fff;">` : `<i data-lucide="camera-off" color="#64748b"></i>`;
+            div.innerHTML = `
+                <div class="card-info"><b>${a.name}</b></div>
+                ${photoHTML}
+                <button class="btn-fly" onclick="startMap(${i}); event.stopPropagation();">PETA</button>
+                <button class="btn-sq" style="width:40px;height:40px;background:#334155" onclick="capturePhoto(${i}); event.stopPropagation();">
+                    <i data-lucide="camera" size="18"></i>
+                </button>`;
+            list.appendChild(div);
+        });
+        document.getElementById('active-title').innerText = projA.name;
+        showP('bidang-page');
+        lucide.createIcons();
+    }
+
+    // UTILS
+    function calcD(lat1, lon1, lat2, lon2) {
+        const R = 6371000;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+    
+    function playBeep(f) { 
+        try { 
+            let c=new(window.AudioContext||window.webkitAudioContext)();
+            let o=c.createOscillator();
+            let g=c.createGain();
+            o.frequency.value=f; o.connect(g); g.connect(c.destination);
+            o.start(); g.gain.exponentialRampToValueAtTime(0.00001,c.currentTime+0.1);
+            setTimeout(()=>o.stop(),120); 
+        } catch(e){} 
+    }
+    
+    function stopLock() { 
+        lockT=null; 
+        if(lineN) map.removeLayer(lineN); 
+        document.getElementById('btn-cancel').style.display='none'; 
+        document.getElementById('nav-label').innerText="GPS AKTIF"; 
+    }
+
+    function showPhoto(src) { 
+        document.getElementById('modal-image').src=src; 
+        document.getElementById('photo-modal').style.display='flex'; 
+    }
+
+    function handleExcelUpload(input, type) {
+        if(!input.files[0]) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            const key = (type==='PBB')?KEY_PBB:KEY_PBT;
+            let d = JSON.parse(localStorage.getItem(key)||'[]');
+            d.unshift({name:input.files[0].name, date:new Date().toLocaleDateString('id-ID')});
+            localStorage.setItem(key, JSON.stringify(d));
+            loadExcelList(type);
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+
+    function loadExcelList(type) {
+        const key = (type==='PBB')?KEY_PBB:KEY_PBT;
+        const list = document.getElementById(type.toLowerCase()+'-list');
+        const data = JSON.parse(localStorage.getItem(key)||'[]');
+        list.innerHTML = data.map(i => `<div class="card-row"><i data-lucide="file-text" size="18"></i><div class="card-info"><b>${i.name}</b><small>${i.date}</small></div></div>`).join('');
+        lucide.createIcons();
+    }
+
+    function handleNotulenUpload(input) {
+        if(!input.files[0]) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            let d = JSON.parse(localStorage.getItem(KEY_NOTULEN)||'[]');
+            d.unshift({name:input.files[0].name, date:document.getElementById('not-date').value || new Date().toLocaleDateString('id-ID')});
+            localStorage.setItem(KEY_NOTULEN, JSON.stringify(d));
+            loadNotulenList();
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+
+    function loadNotulenList() {
+        const data = JSON.parse(localStorage.getItem(KEY_NOTULEN)||'[]');
+        document.getElementById('notulen-list').innerHTML = data.map(i => `<div class="card-row"><i data-lucide="clipboard" size="18"></i><div class="card-info"><b>${i.name}</b><small>${i.date}</small></div></div>`).join('');
+        lucide.createIcons();
+    }
+
+    window.onload = loadDash;
+</script>
+</body>
+</html>
